@@ -4,6 +4,7 @@ import {
   Users,
   Building2,
   CreditCard,
+  BarChart3,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -23,6 +24,12 @@ const navItems = [
     label: "Dashboard", 
     icon: LayoutDashboard,
     description: "Overview & analytics"
+  },
+  { 
+    id: "analytics", 
+    label: "Analytics", 
+    icon: BarChart3,
+    description: "Business insights"
   },
   { 
     id: "users", 

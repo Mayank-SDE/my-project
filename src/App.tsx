@@ -8,6 +8,7 @@ import { UsersList } from "./components/UsersList";
 import { UserDetail } from "./components/UserDetail";
 import { SubscriptionsList } from "./components/SubscriptionsList";
 import { EnhancedDashboard } from "./components/EnhancedDashboard";
+import { AnalyticsDashboard } from "./components/AnalyticsDashboard";
 import { ClientAccounts } from "./components/ClientAccounts";
 import { ManageAccount } from "./components/ManageAccount";
 import { UpgradeFlow } from "./components/UpgradeFlow";
@@ -44,6 +45,7 @@ export default function App() {
   // Get active section for sidebar
   const getActiveSection = () => {
     if (currentRoute.startsWith("/admin/dashboard")) return "dashboard";
+    if (currentRoute.startsWith("/admin/analytics")) return "analytics";
     if (currentRoute.startsWith("/admin/users")) return "users";
     if (currentRoute.startsWith("/admin/requests")) return "requests";
     if (currentRoute.startsWith("/admin/subscriptions")) return "subscriptions";
@@ -51,25 +53,29 @@ export default function App() {
     return "dashboard";
   };
 
+  // Handle section change
   const handleSectionChange = (section: string) => {
     switch (section) {
       case "dashboard":
-        navigate("/admin/dashboard");
+        setCurrentRoute("/admin/dashboard");
+        break;
+      case "analytics":
+        setCurrentRoute("/admin/analytics");
         break;
       case "users":
-        navigate("/admin/users");
+        setCurrentRoute("/admin/users");
         break;
       case "requests":
-        navigate("/admin/requests");
+        setCurrentRoute("/admin/requests");
         break;
       case "subscriptions":
-        navigate("/admin/subscriptions");
+        setCurrentRoute("/admin/subscriptions");
         break;
       case "accounts":
-        navigate("/app/accounts");
+        setCurrentRoute("/app/accounts");
         break;
       default:
-        navigate("/admin/dashboard");
+        setCurrentRoute("/admin/dashboard");
     }
   };
 
@@ -77,6 +83,9 @@ export default function App() {
     switch (currentRoute) {
       case "/admin/dashboard":
         return <EnhancedDashboard navigate={navigate} />;
+      
+      case "/admin/analytics":
+        return <AnalyticsDashboard />;
       
       case "/admin/users":
         return <UsersList navigate={navigate} />;
