@@ -375,7 +375,7 @@ export function AnalyticsDashboard() {
 
         {/* Subscription Analytics */}
         <TabsContent value="subscriptions" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle>Subscription Distribution</CardTitle>
@@ -408,25 +408,76 @@ export function AnalyticsDashboard() {
                 <CardTitle>Module Usage</CardTitle>
                 <CardDescription>Feature adoption across customer base</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {analyticsData.moduleUsage.map((module) => (
-                  <div key={module.module} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{module.module}</span>
-                      <div className="text-right">
-                        <span className="text-xs text-muted-foreground">
-                          {formatNumber(module.accounts)} accounts
-                        </span>
-                      </div>
-                    </div>
-                    <Progress value={module.usage} className="h-2" />
-                    <div className="text-right">
-                      <span className="text-xs text-muted-foreground">
-                        {formatPercentage(module.usage)} adoption
-                      </span>
-                    </div>
-                  </div>
-                ))}
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={analyticsData.moduleUsage}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="module" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="usage" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Accounts by Subscription Type</CardTitle>
+                <CardDescription>Bar chart of accounts per subscription plan</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={analyticsData.subscriptionDistribution}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="value">
+                      {analyticsData.subscriptionDistribution.map((entry, index) => (
+                        <Cell key={`cell-bar-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Example: Pie chart for request types (dummy data) */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Request Types</CardTitle>
+                <CardDescription>Distribution of request types</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Upgrade', value: 120, color: '#8884d8' },
+                        { name: 'Downgrade', value: 45, color: '#82ca9d' },
+                        { name: 'Cancel', value: 32, color: '#ffc658' },
+                        { name: 'Other', value: 18, color: '#ff7f50' }
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      label={({ name, value }) => `${name}: ${value}`}
+                    >
+                      {[
+                        { name: 'Upgrade', value: 120, color: '#8884d8' },
+                        { name: 'Downgrade', value: 45, color: '#82ca9d' },
+                        { name: 'Cancel', value: 32, color: '#ffc658' },
+                        { name: 'Other', value: 18, color: '#ff7f50' }
+                      ].map((entry, index) => (
+                        <Cell key={`cell-req-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>

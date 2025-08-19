@@ -11,7 +11,7 @@ import {
 import { Button } from "./ui/button";
 import { cn } from "./ui/utils";
 import { Badge } from "./ui/badge";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface SidebarProps {
   activeSection: string;
@@ -60,45 +60,63 @@ const navItems = [
 
 export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  // Responsive: detect mobile using window width
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   return (
-    <div className={cn(
-      "relative flex flex-col bg-sidebar border-r transition-all duration-300",
-      isCollapsed ? "w-16" : "w-72"
-    )}>
-      {/* Collapse toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute -right-3 top-6 h-6 w-6 rounded-full border bg-background shadow-sm z-10"
-        onClick={() => setIsCollapsed(!isCollapsed)}
-      >
-        {isCollapsed ? (
-          <ChevronRight className="h-3 w-3" />
-        ) : (
-          <ChevronLeft className="h-3 w-3" />
-        )}
-      </Button>
+    <div
+      className={cn(
+        "relative flex flex-col bg-sidebar border-r transition-all duration-300",
+        isCollapsed && !isMobile ? "w-16" : "w-72",
+        isMobile ? "fixed bottom-0 left-0 w-full h-16 flex-row z-50 border-t border-r-0" : ""
+      )}
+      style={isMobile ? { minHeight: "4rem" } : {}}
+    >
+      {/* Collapse toggle (hide on mobile) */}
+      {!isMobile && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute -right-3 top-6 h-6 w-6 rounded-full border bg-background shadow-sm z-10"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-3 w-3" />
+          ) : (
+            <ChevronLeft className="h-3 w-3" />
+          )}
+        </Button>
+      )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className={cn(
+        "flex-1 p-2 sm:p-4",
+        isMobile ? "flex flex-row items-center justify-between space-y-0 space-x-2 overflow-x-auto" : "space-y-2"
+      )}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
-          
           return (
             <Button
               key={item.id}
               variant={isActive ? "default" : "ghost"}
               className={cn(
-                "w-full justify-start gap-3 h-12 rounded-xl transition-all",
+                isMobile
+                  ? "min-w-[60px] h-12 px-2 flex-col items-center justify-center gap-1 text-xs"
+                  : "w-full justify-start gap-3 h-12 rounded-xl transition-all",
                 isActive && "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm",
-                isCollapsed ? "px-3 justify-center" : "px-4"
+                isCollapsed && !isMobile ? "px-3 justify-center" : "px-4"
               )}
               onClick={() => onSectionChange(item.id)}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              {!isCollapsed && (
+              {!isCollapsed && !isMobile && (
                 <div className="flex-1 text-left">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{item.label}</span>
@@ -122,13 +140,17 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
                   </p>
                 </div>
               )}
+              {isMobile && <span>{item.label}</span>}
+              {item.badge && isMobile && (
+                <Badge variant="secondary" className="ml-1">{item.badge}</Badge>
+              )}
             </Button>
           );
         })}
       </nav>
 
-      {/* Footer */}
-      {!isCollapsed && (
+      {/* Footer (hide on mobile) */}
+      {!isCollapsed && !isMobile && (
         <div className="p-4 border-t">
           <div className="text-xs text-muted-foreground">
             <div className="font-medium">S2M Support Admin v2.0.0</div>

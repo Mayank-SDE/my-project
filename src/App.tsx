@@ -14,27 +14,27 @@ import { ManageAccount } from "./components/ManageAccount";
 import { UpgradeFlow } from "./components/UpgradeFlow";
 import { Toaster } from "./components/ui/sonner";
 
+
+
 export default function App() {
   const [currentRoute, setCurrentRoute] = useState("/admin/dashboard");
   const [routeParams, setRouteParams] = useState<Record<string, string>>({});
   const [isDark, setIsDark] = useState(false);
-
-  // Initialize theme
+  const [isMobile, setIsMobile] = useState(false);
+// Theme toggle handler
+const handleThemeToggle = () => {
+  const newTheme = !isDark;
+  setIsDark(newTheme);
+  localStorage.setItem("s2m-theme", newTheme ? "dark" : "light");
+  document.documentElement.classList.toggle("dark", newTheme);
+};
+  // Responsive: detect mobile using window width
   useEffect(() => {
-    const savedTheme = localStorage.getItem("s2m-theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const shouldBeDark = savedTheme === "dark" || (savedTheme === null && prefersDark);
-    
-    setIsDark(shouldBeDark);
-    document.documentElement.classList.toggle("dark", shouldBeDark);
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  const handleThemeToggle = () => {
-    const newTheme = !isDark;
-    setIsDark(newTheme);
-    localStorage.setItem("s2m-theme", newTheme ? "dark" : "light");
-    document.documentElement.classList.toggle("dark", newTheme);
-  };
 
   // Navigation helper
   const navigate = (route: string, params: Record<string, string> = {}) => {
@@ -79,64 +79,33 @@ export default function App() {
     }
   };
 
-  const renderContent = () => {
-    switch (currentRoute) {
-      case "/admin/dashboard":
-        return <EnhancedDashboard navigate={navigate} />;
-      
-      case "/admin/analytics":
-        return <AnalyticsDashboard />;
-      
-      case "/admin/users":
-        return <UsersList navigate={navigate} />;
-      
-      case "/admin/users/detail":
-        return <UserDetail userId={routeParams.id} navigate={navigate} />;
-      
-      case "/admin/requests":
-        return <RequestsList navigate={navigate} />;
-      
-      case "/admin/requests/detail":
-        return <RequestDetail requestId={routeParams.id} navigate={navigate} />;
-      
-      case "/admin/subscriptions":
-        return <SubscriptionsList navigate={navigate} />;
-      
-      case "/app/accounts":
-        return <ClientAccounts navigate={navigate} />;
-      
-      case "/app/accounts/manage":
-        return <ManageAccount accountId={routeParams.id} navigate={navigate} />;
-      
-      case "/app/accounts/upgrade":
-        return <UpgradeFlow accountId={routeParams.id} navigate={navigate} />;
-      
-      default:
-        return <EnhancedDashboard navigate={navigate} />;
-    }
-  };
-
   return (
-    <div className="h-screen flex flex-col bg-background">
-      {/* Header */}
-      <Header onThemeToggle={handleThemeToggle} isDark={isDark} currentRoute={currentRoute} />
-      
-      {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar 
-          activeSection={getActiveSection()} 
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header
+        onThemeToggle={handleThemeToggle}
+        isDark={isDark}
+        currentRoute={currentRoute}
+      />
+      <div className={isMobile ? "flex flex-col flex-1" : "flex flex-1"}>
+        <Sidebar
+          activeSection={getActiveSection()}
           onSectionChange={handleSectionChange}
         />
-        
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">
-          {renderContent()}
+        <main className={isMobile ? "flex-1 overflow-y-auto pt-2 pb-20 px-2" : "flex-1 overflow-y-auto p-6"}>
+          {/* Route rendering logic */}
+          {currentRoute === "/admin/dashboard" && <EnhancedDashboard navigate={navigate} />}
+          {currentRoute === "/admin/analytics" && <AnalyticsDashboard />}
+          {currentRoute === "/admin/users" && <UsersList navigate={navigate} />}
+          {currentRoute === "/admin/users/detail" && <UserDetail userId={routeParams.id} navigate={navigate} />}
+          {currentRoute === "/admin/requests" && <RequestsList navigate={navigate} />}
+          {currentRoute === "/admin/requests/detail" && <RequestDetail requestId={routeParams.id} navigate={navigate} />}
+          {currentRoute === "/admin/subscriptions" && <SubscriptionsList navigate={navigate} />}
+          {currentRoute === "/app/accounts" && <ClientAccounts navigate={navigate} />}
+          {currentRoute === "/app/accounts/manage" && <ManageAccount accountId={routeParams.id} navigate={navigate} />}
+          {currentRoute === "/app/accounts/upgrade" && <UpgradeFlow accountId={routeParams.id} navigate={navigate} />}
         </main>
       </div>
-
-      {/* Toast notifications */}
       <Toaster />
     </div>
-  );
+  );     
 }

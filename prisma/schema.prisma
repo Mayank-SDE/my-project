@@ -1,0 +1,229 @@
+// Prisma schema inferred from your frontend domain (users, accounts, subscriptions, requests, invoices, modules)
+// Adjust as needed.
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql" // or mysql/sqlserver/sqlite
+    url      = env("DATABASE_URL")
+}
+
+// Core user of the system (admin or client user)
+model User {
+    id        String                @id @default(cuid())
+    email     String                @unique
+    name      String?
+    role      UserRole              @default(USER)
+    status    UserStatus            @default(ACTIVE)
+    createdAt DateTime              @default(now())
+    updatedAt DateTime              @updatedAt
+    // Relations
+    accounts  Account[]             @relation("AccountUsers")
+    requests  SubscriptionRequest[]
+    invoices  Invoice[]
+    auditLogs AuditLog[]
+}
+
+enum UserRole {
+    ADMIN
+    USER
+}
+
+enum UserStatus {
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+}
+
+// A client organization/account owning subscriptions
+model Account {
+    id                   String                @id @default(cuid())
+    name                 String
+    industry             String?
+    tier                 SubscriptionTier      @default(BASIC)
+    status               AccountStatus         @default(ACTIVE)
+    createdAt            DateTime              @default(now())
+    updatedAt            DateTime              @updatedAt
+    // Relations
+    users                User[]                @relation("AccountUsers")
+    subscriptions        Subscription[]
+    subscriptionRequests SubscriptionRequest[]
+    invoices             Invoice[]
+    modules              AccountModule[]
+    usageSnapshots       UsageSnapshot[]
+}
+
+enum AccountStatus {
+    ACTIVE
+    TRIAL
+    PAST_DUE
+    SUSPENDED
+    CANCELLED
+}
+
+enum SubscriptionTier {
+    BASIC
+    PROFESSIONAL
+    ENTERPRISE
+}
+
+// A purchased subscription (could have multiple active over time for upgrades)
+model Subscription {
+    id             String               @id @default(cuid())
+    accountId      String
+    plan           SubscriptionPlan     @default(MAPS)
+    status         SubscriptionStatus   @default(ACTIVE)
+    seats          Int                  @default(1)
+    startDate      DateTime             @default(now())
+    endDate        DateTime?
+    renewsAt       DateTime?
+    autoRenew      Boolean              @default(true)
+    createdAt      DateTime             @default(now())
+    updatedAt      DateTime             @updatedAt
+    // Relations
+    account        Account              @relation(fields: [accountId], references: [id])
+    invoices       Invoice[]
+    modules        SubscriptionModule[]
+    usageSnapshots UsageSnapshot[]
+}
+
+enum SubscriptionPlan {
+    MAPS
+    AERIAL_LIDAR
+    RAIL_INSIGHTS
+    AEC_BIM
+    ADVANCED_ANALYTICS
+}
+
+enum SubscriptionStatus {
+    ACTIVE
+    EXPIRED
+    CANCELLED
+    PENDING
+}
+
+// Request to change subscription state (upgrade, cancel, etc.)
+model SubscriptionRequest {
+    id        String            @id @default(cuid())
+    accountId String
+    userId    String?
+    type      RequestType
+    status    RequestStatus     @default(PENDING)
+    oldPlan   SubscriptionPlan?
+    newPlan   SubscriptionPlan?
+    reason    String?
+    createdAt DateTime          @default(now())
+    decidedAt DateTime?
+    // Relations
+    account   Account           @relation(fields: [accountId], references: [id])
+    user      User?             @relation(fields: [userId], references: [id])
+    auditLogs AuditLog[]
+}
+
+enum RequestType {
+    UPGRADE
+    DOWNGRADE
+    CANCEL
+    NEW
+    RENEWAL
+}
+
+enum RequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+// Invoice / billing document
+model Invoice {
+    id             String            @id @default(cuid())
+    number         String            @unique
+    accountId      String
+    userId         String?
+    subscriptionId String?
+    amount         Int // store smallest currency unit (e.g., paise)
+    currency       String            @default("INR")
+    status         InvoiceStatus     @default(DRAFT)
+    issuedAt       DateTime          @default(now())
+    dueAt          DateTime?
+    paidAt         DateTime?
+    createdAt      DateTime          @default(now())
+    updatedAt      DateTime          @updatedAt
+    // Relations
+    account        Account           @relation(fields: [accountId], references: [id])
+    user           User?             @relation(fields: [userId], references: [id])
+    subscription   Subscription?     @relation(fields: [subscriptionId], references: [id])
+    lineItems      InvoiceLineItem[]
+}
+
+enum InvoiceStatus {
+    DRAFT
+    SENT
+    PAID
+    VOID
+    OVERDUE
+}
+
+model InvoiceLineItem {
+    id          String            @id @default(cuid())
+    invoiceId   String
+    description String
+    quantity    Int               @default(1)
+    unitAmount  Int // smallest currency unit
+    module      SubscriptionPlan?
+    // Relations
+    invoice     Invoice           @relation(fields: [invoiceId], references: [id])
+}
+
+// Bridge between Account and optional modules purchased outside base plan
+model AccountModule {
+    id        String           @id @default(cuid())
+    accountId String
+    plan      SubscriptionPlan
+    enabled   Boolean          @default(true)
+    addedAt   DateTime         @default(now())
+    // Relations
+    account   Account          @relation(fields: [accountId], references: [id])
+}
+
+// Bridge between Subscription and modules actually active in that subscription
+model SubscriptionModule {
+    id             String           @id @default(cuid())
+    subscriptionId String
+    plan           SubscriptionPlan
+    enabled        Boolean          @default(true)
+    addedAt        DateTime         @default(now())
+    // Relations
+    subscription   Subscription     @relation(fields: [subscriptionId], references: [id])
+}
+
+// Periodic usage snapshot for analytics
+model UsageSnapshot {
+    id             String           @id @default(cuid())
+    accountId      String
+    subscriptionId String?
+    plan           SubscriptionPlan
+    date           DateTime         @default(now())
+    activeUsers    Int              @default(0)
+    apiCalls       Int              @default(0)
+    storageMb      Int              @default(0)
+    // Relations
+    account        Account          @relation(fields: [accountId], references: [id])
+    subscription   Subscription?    @relation(fields: [subscriptionId], references: [id])
+}
+
+// Audit trail
+model AuditLog {
+    id                    String               @id @default(cuid())
+    userId                String?
+    subscriptionRequestId String?
+    action                String
+    metadata              Json?
+    createdAt             DateTime             @default(now())
+    // Relations
+    user                  User?                @relation(fields: [userId], references: [id])
+    subscriptionRequest   SubscriptionRequest? @relation(fields: [subscriptionRequestId], references: [id])
+}
