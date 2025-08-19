@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import {
   Table,
@@ -11,22 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import { 
-  Search, 
-  Filter, 
-  Download, 
-  Eye, 
-  Calendar,
-  User,
-  UserPlus
-} from "lucide-react";
+import { FilterBar } from "./FilterBar";
+import { Download, Eye, UserPlus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 
 // Sample users data
@@ -164,71 +149,33 @@ export function UsersList({ navigate }: UsersListProps) {
         </div>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Search */}
-            <div className="flex-1 min-w-64">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, email, or company..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            {/* Role Filter */}
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-40">
-                <User className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="systemadmin">System Admin</SelectItem>
-                <SelectItem value="support">Support</SelectItem>
-                <SelectItem value="clientadmin">Client Admin</SelectItem>
-                <SelectItem value="clientuser">Client User</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-32">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Date Filter */}
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-36">
-                <Calendar className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Results count */}
-            <div className="text-sm text-muted-foreground">
-              {filteredUsers.length} of {usersData.length} users
-            </div>
-          </div>
+          <FilterBar
+            search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search by name, email, or company...' }}
+            selects={[
+              { config: { key: 'role', options: [
+                { value: 'all', label: 'All Roles' },
+                { value: 'systemadmin', label: 'System Admin' },
+                { value: 'support', label: 'Support' },
+                { value: 'clientadmin', label: 'Client Admin' },
+                { value: 'clientuser', label: 'Client User' }
+              ] }, value: roleFilter, onChange: setRoleFilter },
+              { config: { key: 'status', options: [
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'suspended', label: 'Suspended' }
+              ] }, value: statusFilter, onChange: setStatusFilter },
+              { config: { key: 'date', options: [
+                { value: 'all', label: 'All Time' },
+                { value: 'today', label: 'Today' },
+                { value: 'week', label: 'This Week' },
+                { value: 'month', label: 'This Month' }
+              ] }, value: dateFilter, onChange: setDateFilter }
+            ]}
+            resultsInfo={<>{filteredUsers.length} of {usersData.length} users</>}
+          />
         </CardContent>
       </Card>
 

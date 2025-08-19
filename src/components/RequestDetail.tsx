@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import { StatusBadge } from "./StatusBadge";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -33,34 +32,19 @@ import {
   Calendar,
   User,
   Building2,
-  DollarSign
+  
 } from "lucide-react";
 import { toast } from "sonner";
+import { requestsService } from "../services/requestsService";
+import { invoicesService } from "../services/invoicesService";
+import { auditLogService } from "../services/auditLogService";
+import { AuditLogPanel } from "./AuditLogPanel";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Badge } from "./ui/badge";
+import type { SubscriptionRequest, AuditLogEntry } from "../types/domain";
+import { RequestStatusUI } from "../types/domain";
 
-// Mock request data
-const getRequestData = (requestId: string) => ({
-  id: requestId,
-  user: {
-    name: "Priya Shah",
-    email: "priya@acme.com",
-    company: "Acme Infra"
-  },
-  type: "New Account",
-  status: "Pending",
-  createdAt: "2025-01-15",
-  requestedBilling: "Yearly",
-  requestedMaxUser: 25,
-  requestedMaxDataSize: 250,
-  requestedModules: ["Maps", "Reporting"],
-  quoteAmount: 11800,
-  timeline: [
-    { step: "Created", date: "2025-01-15", status: "completed" },
-    { step: "Under Review", date: "2025-01-15", status: "current" },
-    { step: "Quoted", date: "", status: "pending" },
-    { step: "Sent", date: "", status: "pending" },
-    { step: "Approved", date: "", status: "pending" },
-  ]
-});
+interface TimelineStep { step: string; date?: string; status: 'completed' | 'current' | 'pending'; }
 
 interface RequestDetailProps {
   requestId: string;
@@ -68,35 +52,58 @@ interface RequestDetailProps {
 }
 
 export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
-  const [request, setRequest] = useState(getRequestData(requestId));
+  const [request, setRequest] = useState<SubscriptionRequest | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [audit, setAudit] = useState<AuditLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [relatedInvoices, setRelatedInvoices] = useState<any[]>([]);
 
-  const handleApprove = () => {
-    setRequest(prev => ({ ...prev, status: "Approved" }));
-    setShowApproveModal(false);
-    toast.success("Request approved successfully");
-  };
+  useEffect(()=>{
+    let unsubReq: (()=>void)|undefined;
+    const load = async () => {
+  setLoading(true);
+  const r = await requestsService.get(requestId);
+  setRequest(r||null);
+  if(r){ const invs = await invoicesService.list(); setRelatedInvoices(invs.data.filter(i=>i.requestId===r.id)); }
+  const logs = await auditLogService.list({ entityId: requestId });
+  setAudit(logs.data);
+      setLoading(false);
+      unsubReq = requestsService.onChange(async ()=>{
+        const updated = await requestsService.get(requestId); setRequest(updated||null);
+        if(updated){ const invs2 = await invoicesService.list(); setRelatedInvoices(invs2.data.filter(i=>i.requestId===updated.id)); }
+        const logs2 = await auditLogService.list({ entityId: requestId }); setAudit(logs2.data);
+      });
+    };
+    load();
+    return ()=>{ if(unsubReq) unsubReq(); };
+  },[requestId]);
 
-  const handleReject = () => {
-    setRequest(prev => ({ ...prev, status: "Rejected" }));
-    setShowRejectModal(false);
-    toast.success("Request rejected");
-  };
+  const handleApprove = async () => {
+    if(!request) return; await requestsService.setStatus(request.id, RequestStatusUI.APPROVED); setShowApproveModal(false); toast.success("Request approved successfully"); };
 
-  const handleGenerateQuotation = () => {
-    setShowQuoteModal(false);
-    toast.success("Quotation generated and ready for preview");
-  };
+  const handleReject = async () => { if(!request) return; await requestsService.setStatus(request.id, RequestStatusUI.REJECTED); setShowRejectModal(false); toast.success("Request rejected"); };
+
+  const handleGenerateQuotation = async () => { if(!request) return; setShowQuoteModal(false); await invoicesService.createDraftQuotation({ requestId: request.id, accountId: '1', amount: request.quoteAmount || 0, currency: 'INR', lineItems: [{ description: request.type.replace('_',' '), quantity: 1, unitAmount: request.quoteAmount||0 }] }); toast.success("Quotation created (draft)"); };
 
   const formatCurrency = (amount: number) => {
     return `₹${amount.toLocaleString()}`;
   };
 
-  const availableModules = ["Maps", "Aerial Lidar", "Rail Insights", "AEC BIM", "Fiber Planner", "Reporting"];
+  // const availableModules = ["Maps", "Aerial Lidar", "Rail Insights", "AEC BIM", "Fiber Planner", "Reporting"]; // future use for editing modules
+
+  if(loading) return <div className="p-6">Loading...</div>;
+  if(!request) return <div className="p-6">Request not found</div>;
+
+  const timeline: TimelineStep[] = [
+    { step: 'Created', date: request.createdAt, status: 'completed' },
+    { step: 'Quoted', date: audit.find(a=>a.action==='QUOTATION_DRAFT_CREATED')?.timestamp?.slice(0,10), status: request.status===RequestStatusUI.QUOTED||request.status===RequestStatusUI.SENT||request.status===RequestStatusUI.APPROVED?'completed':'pending' },
+    { step: 'Sent', date: audit.find(a=>a.action==='QUOTATION_SENT')?.timestamp?.slice(0,10), status: request.status===RequestStatusUI.SENT||request.status===RequestStatusUI.APPROVED?'completed':'pending' },
+    { step: 'Approved', date: request.status===RequestStatusUI.APPROVED? new Date().toISOString().slice(0,10): undefined, status: request.status===RequestStatusUI.APPROVED?'current':'pending' }
+  ];
 
   return (
     <div className="p-6 space-y-6">
@@ -108,7 +115,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold">{request.id}</h1>
-            <StatusBadge status={request.status as any} />
+            <StatusBadge status={request.status} />
           </div>
           <p className="text-muted-foreground mt-1">{request.type} Request • Created {request.createdAt}</p>
         </div>
@@ -145,12 +152,12 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
                 <div>
                   <Label>Request Type</Label>
                   <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
-                    {request.type}
+                    {request.type.replace('_',' ')}
                   </Badge>
                 </div>
                 <div>
                   <Label>Status</Label>
-                  <StatusBadge status={request.status as any} />
+                  <StatusBadge status={request.status} />
                 </div>
               </div>
             </CardContent>
@@ -170,7 +177,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
                   <div>
                     <Label htmlFor="billing">Billing Cycle</Label>
                     <Select value={request.requestedBilling} onValueChange={(value) => 
-                      setRequest(prev => ({ ...prev, requestedBilling: value }))
+                      setRequest(prev => prev ? { ...prev, requestedBilling: value as any } : prev)
                     }>
                       <SelectTrigger>
                         <SelectValue />
@@ -187,10 +194,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
                       id="maxUser"
                       type="number"
                       value={request.requestedMaxUser}
-                      onChange={(e) => setRequest(prev => ({ 
-                        ...prev, 
-                        requestedMaxUser: parseInt(e.target.value) 
-                      }))}
+                      onChange={(e) => setRequest(prev => prev ? { ...prev, requestedMaxUser: parseInt(e.target.value) } : prev)}
                     />
                   </div>
                   <div>
@@ -199,10 +203,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
                       id="maxData"
                       type="number"
                       value={request.requestedMaxDataSize}
-                      onChange={(e) => setRequest(prev => ({ 
-                        ...prev, 
-                        requestedMaxDataSize: parseInt(e.target.value) 
-                      }))}
+                      onChange={(e) => setRequest(prev => prev ? { ...prev, requestedMaxDataSize: parseInt(e.target.value) } : prev)}
                     />
                   </div>
                   <div>
@@ -211,10 +212,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
                       id="amount"
                       type="number"
                       value={request.quoteAmount}
-                      onChange={(e) => setRequest(prev => ({ 
-                        ...prev, 
-                        quoteAmount: parseInt(e.target.value) 
-                      }))}
+                      onChange={(e) => setRequest(prev => prev ? { ...prev, quoteAmount: parseInt(e.target.value) } : prev)}
                     />
                   </div>
                 </div>
@@ -244,7 +242,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
               <div>
                 <Label>Requested Modules</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {request.requestedModules.map((module, index) => (
+                  {(request.requestedModules||[]).map((module, index) => (
                     <Badge key={index} variant="secondary">
                       {module}
                     </Badge>
@@ -255,7 +253,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
           </Card>
 
           {/* Actions */}
-          {request.status === "Pending" && (
+          {request.status === RequestStatusUI.PENDING && (
             <Card>
               <CardHeader>
                 <CardTitle>Actions</CardTitle>
@@ -369,7 +367,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
           )}
         </div>
 
-        {/* Timeline Panel */}
+        {/* Sidebar Panels */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -380,7 +378,7 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {request.timeline.map((step, index) => (
+                {timeline.map((step, index) => (
                   <div key={index} className="flex items-start gap-3">
                     <div className={`w-2 h-2 rounded-full mt-2 ${
                       step.status === "completed" ? "bg-green-500" :
@@ -401,6 +399,42 @@ export function RequestDetail({ requestId, navigate }: RequestDetailProps) {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Related Invoices / Quotations
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-auto max-h-64">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-36">Number</TableHead>
+                      <TableHead className="w-24">Kind</TableHead>
+                      <TableHead className="w-24">Status</TableHead>
+                      <TableHead className="text-right w-32">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {relatedInvoices.map(inv => (
+                      <TableRow key={inv.id}>
+                        <TableCell className="font-mono text-xs">{inv.number}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{inv.kind}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{inv.status}</Badge></TableCell>
+                        <TableCell className="text-right text-xs">₹{inv.amount.toLocaleString('en-IN')}</TableCell>
+                      </TableRow>
+                    ))}
+                    {relatedInvoices.length===0 && <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground text-xs">No related invoices yet</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <AuditLogPanel entityId={request.id} />
         </div>
       </div>
     </div>

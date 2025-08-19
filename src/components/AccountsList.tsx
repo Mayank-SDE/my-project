@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { useEffect, useState } from "react";
+import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { StatusBadge } from "./StatusBadge";
 import {
   Table,
@@ -11,14 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import { Search, Filter, Download, Eye, Settings, FileText, Users } from "lucide-react";
+import { Download, Eye, Settings, FileText, Users } from "lucide-react";
 import { Badge } from "./ui/badge";
 import {
   DropdownMenu,
@@ -27,69 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
-// Sample accounts data
-const accountsData = [
-  {
-    id: "1",
-    name: "Acme Infra",
-    ownerName: "Priya Shah",
-    ownerEmail: "priya@acme.com",
-    planType: "paid",
-    billingCycle: "Yearly" as const,
-    subscriptionStatus: "Active" as const,
-    maxUsers: 25,
-    maxDataSize: "250GB",
-    createdAt: "2025-07-18",
-  },
-  {
-    id: "2", 
-    name: "Nimbus Rail",
-    ownerName: "Arjun Rao",
-    ownerEmail: "arjun@nimbus.io",
-    planType: "trial",
-    billingCycle: "Monthly" as const,
-    subscriptionStatus: "Active" as const,
-    maxUsers: 5,
-    maxDataSize: "50GB", 
-    createdAt: "2025-08-02",
-  },
-  {
-    id: "3",
-    name: "Vertex AEC", 
-    ownerName: "Meera Iyer",
-    ownerEmail: "meera@vertex.aec",
-    planType: "paid",
-    billingCycle: "Monthly" as const,
-    subscriptionStatus: "Suspended" as const,
-    maxUsers: 10,
-    maxDataSize: "120GB",
-    createdAt: "2025-07-05",
-  },
-  {
-    id: "4",
-    name: "TechFlow Solutions",
-    ownerName: "Raj Kumar", 
-    ownerEmail: "raj@techflow.in",
-    planType: "paid",
-    billingCycle: "Yearly" as const,
-    subscriptionStatus: "Expired" as const,
-    maxUsers: 15,
-    maxDataSize: "180GB",
-    createdAt: "2025-06-15",
-  },
-  {
-    id: "5",
-    name: "Urban Dynamics",
-    ownerName: "Lakshmi Nair",
-    ownerEmail: "lakshmi@urbandyn.com", 
-    planType: "trial",
-    billingCycle: "Monthly" as const,
-    subscriptionStatus: "Pending" as const,
-    maxUsers: 5,
-    maxDataSize: "50GB",
-    createdAt: "2025-08-10",
-  },
-];
+import { accountsService } from "../services/accountsService";
+import type { Account } from "../types/domain";
+import { FilterBar } from "./FilterBar";
 
 interface AccountsListProps {
   onAccountSelect: (accountId: string) => void;
@@ -97,8 +29,26 @@ interface AccountsListProps {
 
 export function AccountsList({ onAccountSelect }: AccountsListProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [planTypeFilter, setPlanTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [planTypeFilter, setPlanTypeFilter] = useState("all");
+  const [accountsData, setAccountsData] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    let unsub: (()=>void)|undefined;
+    const load = async () => {
+      setLoading(true);
+      const res = await accountsService.list();
+      setAccountsData(res.data);
+      setLoading(false);
+      unsub = accountsService.onChange(async ()=>{
+        const r = await accountsService.list();
+        setAccountsData(r.data);
+      });
+    };
+    load();
+    return ()=> { if(unsub) unsub(); };
+  },[]);
 
   const filteredAccounts = accountsData.filter(account => {
     const matchesSearch = 
@@ -132,56 +82,27 @@ export function AccountsList({ onAccountSelect }: AccountsListProps) {
         </div>
       </div>
 
-      {/* Toolbar */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Search */}
-            <div className="flex-1 min-w-64">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, owner, or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Plan Type Filter */}
-            <Select value={planTypeFilter} onValueChange={setPlanTypeFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Plan Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Plans</SelectItem>
-                <SelectItem value="trial">Trial</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Results count */}
-            <div className="text-sm text-muted-foreground">
-              {filteredAccounts.length} of {accountsData.length} accounts
-            </div>
-          </div>
+          <FilterBar
+            search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search by name, owner, or email...' }}
+            selects={[
+              { config: { key: 'status', placeholder: 'Status', options: [
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'pending', label: 'Pending' },
+                { value: 'suspended', label: 'Suspended' },
+                { value: 'expired', label: 'Expired' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ] }, value: statusFilter, onChange: setStatusFilter },
+              { config: { key: 'plan', placeholder: 'Plan Type', options: [
+                { value: 'all', label: 'All Plans' },
+                { value: 'trial', label: 'Trial' },
+                { value: 'paid', label: 'Paid' },
+              ], width: 'w-36' }, value: planTypeFilter, onChange: setPlanTypeFilter }
+            ]}
+            resultsInfo={loading ? 'Loading...' : `${filteredAccounts.length} of ${accountsData.length} accounts`}
+          />
         </CardContent>
       </Card>
 
@@ -200,7 +121,8 @@ export function AccountsList({ onAccountSelect }: AccountsListProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAccounts.map((account) => (
+              {loading && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading accounts...</TableCell></TableRow>}
+              {!loading && filteredAccounts.map((account) => (
                 <TableRow key={account.id} className="cursor-pointer hover:bg-muted/50">
                   <TableCell>
                     <div>
@@ -226,7 +148,7 @@ export function AccountsList({ onAccountSelect }: AccountsListProps) {
                   <TableCell>
                     <div className="text-sm">
                       <div>{account.maxUsers} users</div>
-                      <div className="text-muted-foreground">{account.maxDataSize}</div>
+                      <div className="text-muted-foreground">{account.maxDataSizeGb}GB</div>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -262,6 +184,7 @@ export function AccountsList({ onAccountSelect }: AccountsListProps) {
                   </TableCell>
                 </TableRow>
               ))}
+              {!loading && filteredAccounts.length===0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No accounts found</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -270,7 +193,7 @@ export function AccountsList({ onAccountSelect }: AccountsListProps) {
       {/* Pagination placeholder */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing 1-{filteredAccounts.length} of {accountsData.length} accounts
+          {loading ? 'Loading...' : `Showing 1-${filteredAccounts.length} of ${accountsData.length} accounts`}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled>Previous</Button>

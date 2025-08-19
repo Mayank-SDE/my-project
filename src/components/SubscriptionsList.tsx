@@ -1,60 +1,34 @@
+import { useEffect, useState } from 'react';
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Input } from "./ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Search, Filter, MoreHorizontal, CreditCard, Calendar, DollarSign } from "lucide-react";
+import { MoreHorizontal, CreditCard, Calendar, DollarSign } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { subscriptionsService } from '../services/subscriptionsService';
+import type { Subscription } from '../types/domain';
+import { FilterBar } from './FilterBar';
 
 interface SubscriptionsListProps {
   navigate: (route: string, params?: Record<string, string>) => void;
 }
 
-// Mock data for subscriptions
-const subscriptions = [
-  {
-    id: "sub-001",
-    customerName: "Acme Corporation",
-    plan: "Enterprise",
-    status: "Active",
-    amount: "$299/month",
-    startDate: "2024-01-15",
-    nextBilling: "2025-01-15",
-    features: ["Advanced Analytics", "24/7 Support", "Custom Integrations"]
-  },
-  {
-    id: "sub-002",
-    customerName: "TechStart Inc.",
-    plan: "Professional",
-    status: "Active",
-    amount: "$99/month",
-    startDate: "2024-03-10",
-    nextBilling: "2025-03-10",
-    features: ["Analytics Dashboard", "Email Support", "API Access"]
-  },
-  {
-    id: "sub-003",
-    customerName: "Global Solutions",
-    plan: "Enterprise",
-    status: "Expired",
-    amount: "$299/month",
-    startDate: "2023-06-01",
-    nextBilling: "2024-12-01",
-    features: ["Advanced Analytics", "24/7 Support", "Custom Integrations"]
-  },
-  {
-    id: "sub-004",
-    customerName: "Digital Dynamics",
-    plan: "Basic",
-    status: "Suspended",
-    amount: "$29/month",
-    startDate: "2024-08-15",
-    nextBilling: "2025-08-15",
-    features: ["Basic Analytics", "Community Support"]
-  }
-];
-
 export function SubscriptionsList({ navigate }: SubscriptionsListProps) {
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
+  const [plan, setPlan] = useState('all');
+
+  useEffect(()=>{ let unsub: (()=>void)|undefined; const load=async()=>{ setLoading(true); const res= await subscriptionsService.list(); setSubs(res.data); setLoading(false); unsub = subscriptionsService.onChange(async()=>{ const r = await subscriptionsService.list(); setSubs(r.data); }); }; load(); return ()=>{ if(unsub) unsub(); }; },[]);
+
+  const filtered = subs.filter(s => {
+    const q = search.toLowerCase();
+    const matchesSearch = s.customerName.toLowerCase().includes(q) || s.plan.toLowerCase().includes(q);
+    const matchesStatus = status==='all' || s.status.toLowerCase()===status;
+    const matchesPlan = plan==='all' || s.plan.toLowerCase()===plan;
+    return matchesSearch && matchesStatus && matchesPlan;
+  });
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active":
@@ -123,46 +97,33 @@ export function SubscriptionsList({ navigate }: SubscriptionsListProps) {
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Search subscriptions..."
-            className="pl-10"
+      <Card>
+        <CardContent className="p-4">
+          <FilterBar
+            search={{ value: search, onChange: setSearch, placeholder: 'Search subscriptions...' }}
+            selects={[
+              { config: { key: 'status', placeholder: 'Status', options: [
+                { value:'all', label:'All Status' },
+                { value:'active', label:'Active' },
+                { value:'expired', label:'Expired' },
+                { value:'suspended', label:'Suspended' }
+              ] }, value: status, onChange: setStatus },
+              { config: { key: 'plan', placeholder: 'Plan', options: [
+                { value:'all', label:'All Plans' },
+                { value:'basic', label:'Basic' },
+                { value:'professional', label:'Professional' },
+                { value:'enterprise', label:'Enterprise' }
+              ] }, value: plan, onChange: setPlan }
+            ]}
+            resultsInfo={loading ? 'Loading...' : `${filtered.length} of ${subs.length} subscriptions`}
           />
-        </div>
-        <Select defaultValue="all">
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="expired">Expired</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select defaultValue="all">
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Plan" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Plans</SelectItem>
-            <SelectItem value="basic">Basic</SelectItem>
-            <SelectItem value="professional">Professional</SelectItem>
-            <SelectItem value="enterprise">Enterprise</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm">
-          <Filter className="h-4 w-4 mr-2" />
-          More Filters
-        </Button>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Subscriptions List */}
       <div className="space-y-4">
-        {subscriptions.map((subscription) => (
+  {loading && <div className="text-center text-sm text-muted-foreground py-8">Loading subscriptions...</div>}
+  {!loading && filtered.map((subscription) => (
           <Card key={subscription.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
@@ -209,7 +170,8 @@ export function SubscriptionsList({ navigate }: SubscriptionsListProps) {
               </div>
             </CardContent>
           </Card>
-        ))}
+  ))}
+  {!loading && filtered.length===0 && <div className="text-center text-sm text-muted-foreground py-8">No subscriptions found</div>}
       </div>
     </div>
   );

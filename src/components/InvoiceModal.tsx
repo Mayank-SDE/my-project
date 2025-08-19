@@ -10,6 +10,7 @@ import { Separator } from "./ui/separator";
 import { Badge } from "./ui/badge";
 import { Plus, Trash2, Eye, Send, Download, FileText, Receipt } from "lucide-react";
 import { toast } from "sonner";
+import { invoicesService } from "../services/invoicesService";
 
 interface InvoiceItem {
   id: string;
@@ -20,35 +21,15 @@ interface InvoiceItem {
   total: number;
 }
 
-interface InvoiceData {
-  type: "QUOTATION" | "INVOICE";
-  number: string;
-  currency: string;
-  amountSubtotal: number;
-  taxAmount: number;
-  amountTotal: number;
-  accountId?: string;
-  subscriptionRequestId?: string;
-  items: InvoiceItem[];
-  customer: {
-    name: string;
-    email: string;
-    address: string;
-    gstin: string;
-  };
-  dueDate: string | null;
-  notes: string;
-}
 
 interface InvoiceModalProps {
   type: "QUOTATION" | "INVOICE";
   accountId?: string;
   subscriptionRequestId?: string;
   trigger: React.ReactNode;
-  onGenerate?: (invoice: InvoiceData) => void;
 }
 
-export function InvoiceModal({ type, accountId, subscriptionRequestId, trigger, onGenerate }: InvoiceModalProps) {
+export function InvoiceModal({ type, accountId, subscriptionRequestId, trigger }: InvoiceModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -118,37 +99,44 @@ export function InvoiceModal({ type, accountId, subscriptionRequestId, trigger, 
   const generateInvoice = async () => {
     setIsGenerating(true);
     try {
-      // Simulate API call to generate invoice/quotation
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const invoiceData = {
-        type,
-        number: type === "QUOTATION" ? `QTN-2025-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}` : `INV-2025-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-        currency,
-        amountSubtotal: subtotal,
-        taxAmount,
-        amountTotal: total,
-        accountId,
-        subscriptionRequestId,
-        items,
-        customer: customerData,
-        dueDate: dueDate || null,
-        notes
-      };
-
+      if(type === 'QUOTATION' && subscriptionRequestId && accountId){
+        // Create quotation draft via service which also updates request status to QUOTED
+        await invoicesService.createDraftQuotation({
+          requestId: subscriptionRequestId,
+          accountId,
+          amount: total,
+          currency,
+          lineItems: items.map(i=>({ description: i.name || i.description || 'Item', quantity: i.quantity, unitAmount: i.unitPrice })),
+          dueAt: dueDate || undefined
+        });
+      }
+      // For INVOICE type we only show preview for now (future: implement invoicesService.createInvoice)
       setShowPreview(true);
-      onGenerate?.(invoiceData);
-      toast.success(`${type.toLowerCase()} generated successfully!`);
-    } catch {
+      toast.success(`${type.toLowerCase()} generated successfully`);
+    } catch (e){
+      console.error(e);
       toast.error(`Failed to generate ${type.toLowerCase()}`);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const sendEmail = () => {
-    toast.success(`${type.toLowerCase()} sent to ${customerData.email}`);
-    setIsOpen(false);
+  const sendEmail = async () => {
+    try {
+      if(type==='QUOTATION' && subscriptionRequestId){
+        // Locate the most recent draft quotation for this request and mark SENT
+        // (Simple heuristic: invoicesService.list then filter)
+        // For performance we could track last created ID via state; keeping simple.
+        const list = await invoicesService.list();
+        const draft = [...list.data].reverse().find(inv=>inv.requestId===subscriptionRequestId && inv.status==='DRAFT' && inv.kind==='QUOTATION');
+        if(draft){ await invoicesService.markSent(draft.id); }
+      }
+      toast.success(`${type.toLowerCase()} sent to ${customerData.email}`);
+      setIsOpen(false);
+    } catch(e){
+      console.error(e);
+      toast.error('Failed to send email');
+    }
   };
 
   const downloadPDF = () => {

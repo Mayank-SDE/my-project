@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { StatusBadge } from "./StatusBadge";
 import { InvoiceModal } from "./InvoiceModal";
 import {
@@ -13,114 +12,19 @@ import {
   TableRow,
 } from "./ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { 
-  Search, 
-  Filter, 
-  Download, 
-  Eye, 
-  Calendar,
-  DollarSign,
-  User,
-  MoreHorizontal,
-  FileText
-} from "lucide-react";
+import { Download, Eye, User, MoreHorizontal, FileText } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { FilterBar } from "./FilterBar";
 
-// Sample requests data
-const requestsData = [
-  {
-    id: "REQ-2025-001",
-    user: {
-      name: "Priya Shah",
-      email: "priya@acme.com",
-      company: "Acme Infra"
-    },
-    type: "New Account" as const,
-    quoteAmount: 11800,
-    status: "Pending" as const,
-    createdAt: "2025-01-15",
-    requestedBilling: "Yearly",
-    requestedMaxUser: 25,
-    requestedMaxDataSize: 250,
-    requestedModules: ["Maps", "Reporting"]
-  },
-  {
-    id: "REQ-2025-002",
-    user: {
-      name: "Arjun Rao", 
-      email: "arjun@nimbus.io",
-      company: "Nimbus Rail"
-    },
-    type: "Upgrade" as const,
-    quoteAmount: 8500,
-    status: "Approved" as const,
-    createdAt: "2025-01-14",
-    requestedBilling: "Monthly",
-    requestedMaxUser: 50,
-    requestedMaxDataSize: 500,
-    requestedModules: ["Maps", "AerialMapper"]
-  },
-  {
-    id: "REQ-2025-003",
-    user: {
-      name: "Meera Iyer",
-      email: "meera@vertex.aec", 
-      company: "Vertex AEC"
-    },
-    type: "Cancel" as const,
-    quoteAmount: 0,
-    status: "Rejected" as const,
-    createdAt: "2025-01-13",
-    requestedBilling: "",
-    requestedMaxUser: 0,
-    requestedMaxDataSize: 0,
-    requestedModules: []
-  },
-  {
-    id: "REQ-2025-004",
-    user: {
-      name: "Raj Kumar",
-      email: "raj@techflow.in",
-      company: "TechFlow Solutions"
-    },
-    type: "Upgrade" as const,
-    quoteAmount: 15200,
-    status: "Pending" as const,
-    createdAt: "2025-01-12",
-    requestedBilling: "Yearly",
-    requestedMaxUser: 30,
-    requestedMaxDataSize: 300,
-    requestedModules: ["Maps", "AEC BIM", "Fiber Planner"]
-  },
-  {
-    id: "REQ-2025-005",
-    user: {
-      name: "Lakshmi Nair",
-      email: "lakshmi@urbandyn.com",
-      company: "Urban Dynamics"
-    },
-    type: "New Account" as const,
-    quoteAmount: 6200,
-    status: "Cancelled by User" as const,
-    createdAt: "2025-01-11",
-    requestedBilling: "Monthly",
-    requestedMaxUser: 10,
-    requestedMaxDataSize: 100,
-    requestedModules: ["Maps"]
-  },
-];
+import { requestsService } from "../services/requestsService";
+import type { SubscriptionRequest } from "../types/domain";
+import { RequestStatusUI, RequestTypeUI } from "../types/domain";
+import { authService } from "../services/authService";
 
 interface RequestsListProps {
   navigate: (route: string, params?: Record<string, string>) => void;
@@ -132,25 +36,44 @@ export function RequestsList({ navigate }: RequestsListProps) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [amountFilter, setAmountFilter] = useState("all");
+  const [requestsData, setRequestsData] = useState<SubscriptionRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { permissions } = authService.getCurrent();
+
+  useEffect(()=>{
+    let unsub: (()=>void)|undefined;
+    const load = async () => {
+      setLoading(true);
+      const res = await requestsService.list();
+      setRequestsData(res.data);
+      setLoading(false);
+      unsub = requestsService.onChange(async ()=>{
+        const r = await requestsService.list();
+        setRequestsData(r.data);
+      });
+    };
+    load();
+    return () => { if(unsub) unsub(); };
+  },[]);
 
   const filteredRequests = requestsData.filter(request => {
     const matchesSearch = 
       request.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       request.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       request.user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      request.user.company.toLowerCase().includes(searchQuery.toLowerCase());
+  (request.user.company || '').toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesType = typeFilter === "all" || request.type.toLowerCase().replace(" ", "") === typeFilter;
-    const matchesStatus = statusFilter === "all" || request.status.toLowerCase().replace(" ", "") === statusFilter.replace("cancelled", "cancelled by user");
+  const matchesType = typeFilter === "all" || request.type.toLowerCase() === typeFilter;
+  const matchesStatus = statusFilter === "all" || request.status.toLowerCase() === statusFilter;
     
     return matchesSearch && matchesType && matchesStatus;
   });
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "New Account": return "bg-blue-100 text-blue-800 border-blue-200";
-      case "Upgrade": return "bg-purple-100 text-purple-800 border-purple-200";
-      case "Cancel": return "bg-red-100 text-red-800 border-red-200";
+  case RequestTypeUI.NEW_ACCOUNT: return "bg-blue-100 text-blue-800 border-blue-200";
+  case RequestTypeUI.UPGRADE: return "bg-purple-100 text-purple-800 border-purple-200";
+  case RequestTypeUI.CANCEL: return "bg-red-100 text-red-800 border-red-200";
       default: return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
@@ -180,84 +103,35 @@ export function RequestsList({ navigate }: RequestsListProps) {
         </div>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Search */}
-            <div className="flex-1 min-w-64">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by request ID, user, or company..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            {/* Type Filter */}
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-40">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="newaccount">New Account</SelectItem>
-                <SelectItem value="upgrade">Upgrade</SelectItem>
-                <SelectItem value="cancel">Cancel</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="cancelled">Cancelled by User</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Date Range */}
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-36">
-                <Calendar className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Amount Filter */}
-            <Select value={amountFilter} onValueChange={setAmountFilter}>
-              <SelectTrigger className="w-36">
-                <DollarSign className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Amounts</SelectItem>
-                <SelectItem value="low">{"< ₹5,000"}</SelectItem>
-                <SelectItem value="medium">{"₹5,000 - ₹15,000"}</SelectItem>
-                <SelectItem value="high">{"> ₹15,000"}</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Results count */}
-            <div className="text-sm text-muted-foreground">
-              {filteredRequests.length} of {requestsData.length} requests
-            </div>
-          </div>
+          <FilterBar
+            search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search by request ID, user, or company...' }}
+            selects={[
+              { config: { key: 'type', placeholder: 'Type', options: [
+                { value:'all', label:'All Types' },
+                { value:'newaccount', label:'New Account' },
+                { value:'upgrade', label:'Upgrade' },
+                { value:'cancel', label:'Cancel' } ] }, value: typeFilter, onChange: setTypeFilter },
+              { config: { key: 'status', placeholder: 'Status', options: [
+                { value:'all', label:'All Status' },
+                { value:'pending', label:'Pending' },
+                { value:'approved', label:'Approved' },
+                { value:'rejected', label:'Rejected' },
+                { value:'cancelled', label:'Cancelled by User' } ] }, value: statusFilter, onChange: setStatusFilter },
+              { config: { key: 'date', placeholder: 'Date Range', options: [
+                { value:'all', label:'All Time' },
+                { value:'today', label:'Today' },
+                { value:'week', label:'This Week' },
+                { value:'month', label:'This Month' } ], width: 'w-36' }, value: dateFilter, onChange: setDateFilter },
+              { config: { key: 'amount', placeholder: 'Amount', options: [
+                { value:'all', label:'All Amounts' },
+                { value:'low', label:'< ₹5,000' },
+                { value:'medium', label:'₹5,000 - ₹15,000' },
+                { value:'high', label:'> ₹15,000' } ], width: 'w-40' }, value: amountFilter, onChange: setAmountFilter }
+            ]}
+            resultsInfo={loading ? 'Loading...' : `${filteredRequests.length} of ${requestsData.length} requests`}
+          />
         </CardContent>
       </Card>
 
@@ -278,7 +152,12 @@ export function RequestsList({ navigate }: RequestsListProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.map((request) => (
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Loading requests...</TableCell>
+                  </TableRow>
+                )}
+                {!loading && filteredRequests.map((request) => (
                   <TableRow 
                     key={request.id} 
                     className="cursor-pointer hover:bg-muted/50"
@@ -299,11 +178,8 @@ export function RequestsList({ navigate }: RequestsListProps) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge 
-                        variant="outline" 
-                        className={`${getTypeColor(request.type)} font-medium`}
-                      >
-                        {request.type}
+                      <Badge variant="outline" className={`${getTypeColor(request.type)} font-medium`}>
+                        {request.type.replace('_',' ')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">
@@ -329,17 +205,29 @@ export function RequestsList({ navigate }: RequestsListProps) {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
-                          {request.status === "Pending" && (
-                            <InvoiceModal
-                              type="QUOTATION"
-                              subscriptionRequestId={request.id}
-                              trigger={
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                  <FileText className="h-4 w-4 mr-2" />
-                                  Generate Quotation
-                                </DropdownMenuItem>
-                              }
-                            />
+                          {request.status === RequestStatusUI.PENDING && permissions.includes('requests:quote') && (
+                            <>
+                              <InvoiceModal
+                                type="QUOTATION"
+                                subscriptionRequestId={request.id}
+                                // For now map to first account or fallback; in real app request would link to account
+                                accountId={request.userId ? '1' : '1'}
+                                trigger={
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    Generate Quotation
+                                  </DropdownMenuItem>
+                                }
+                              />
+                {permissions.includes('requests:approve') && <DropdownMenuItem onClick={()=>requestsService.setStatus(request.id, RequestStatusUI.APPROVED)}>Approve</DropdownMenuItem>}
+                {permissions.includes('requests:reject') && <DropdownMenuItem onClick={()=>requestsService.setStatus(request.id, RequestStatusUI.REJECTED)} className="text-destructive">Reject</DropdownMenuItem>}
+                            </>
+                          )}
+              {request.status === RequestStatusUI.QUOTED && permissions.includes('invoices:send') && (
+                            <DropdownMenuItem onClick={()=>requestsService.setStatus(request.id, RequestStatusUI.SENT)}>Send Quotation</DropdownMenuItem>
+                          )}
+              {request.status === RequestStatusUI.SENT && permissions.includes('requests:approve') && (
+                            <DropdownMenuItem onClick={()=>requestsService.setStatus(request.id, RequestStatusUI.APPROVED)}>Mark Approved</DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>

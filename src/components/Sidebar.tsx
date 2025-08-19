@@ -45,6 +45,12 @@ const navItems = [
     description: "Subscription requests"
   },
   { 
+    id: "invoices", 
+    label: "Invoices", 
+    icon: CreditCard,
+    description: "Quotations & invoices"
+  },
+  { 
     id: "subscriptions", 
     label: "Subscriptions", 
     icon: CreditCard,

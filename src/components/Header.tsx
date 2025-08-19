@@ -11,7 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { authService } from "../services/authService";
+import { eventBus, EVENTS } from "../services/eventBus";
 
 interface HeaderProps {
   onThemeToggle?: () => void;
@@ -21,6 +23,12 @@ interface HeaderProps {
 
 export function Header({ onThemeToggle, isDark = false, currentRoute }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [{ user }, setAuth] = useState(authService.getCurrent());
+
+  useEffect(()=>{
+    const off = eventBus.on(EVENTS.AUTH_CHANGED, () => setAuth(authService.getCurrent()));
+    return () => { off(); };
+  },[]);
 
   const getBreadcrumb = () => {
     switch (currentRoute) {
@@ -106,19 +114,26 @@ export function Header({ onThemeToggle, isDark = false, currentRoute }: HeaderPr
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/avatars/admin.jpg" alt="Admin" />
-                  <AvatarFallback className="bg-primary text-primary-foreground">AU</AvatarFallback>
+                  <AvatarImage src="/avatars/admin.jpg" alt={user.name} />
+                  <AvatarFallback className="bg-primary text-primary-foreground">{user.name.split(' ').map(p=>p[0]).slice(0,2).join('')}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">Admin User</p>
-                  <p className="text-xs leading-none text-muted-foreground">admin@s2m.com</p>
-                  <Badge variant="outline" className="w-fit text-xs">Admin</Badge>
+                  <p className="text-sm font-medium leading-none">{user.name}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  <Badge variant="outline" className="w-fit text-xs">{user.role.replace('_',' ')}</Badge>
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Role</DropdownMenuLabel>
+              {authService.listUsers().map(u => (
+                <DropdownMenuItem key={u.id} onClick={()=> authService.switchUser(u.id)} className={u.id===user.id? 'bg-muted/60 pointer-events-none' : ''}>
+                  {u.name} - {u.role.replace('_',' ')}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem>
                 <User className="mr-2 h-4 w-4" />

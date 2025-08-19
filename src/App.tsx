@@ -13,6 +13,8 @@ import { ClientAccounts } from "./components/ClientAccounts";
 import { ManageAccount } from "./components/ManageAccount";
 import { UpgradeFlow } from "./components/UpgradeFlow";
 import { Toaster } from "./components/ui/sonner";
+import { InvoicesList } from "./components/InvoicesList";
+import { invoicesService } from "./services/invoicesService";
 
 
 
@@ -33,7 +35,8 @@ const handleThemeToggle = () => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
     handleResize();
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+  const intervalId = setInterval(()=> invoicesService.simulateOverdue(), 15000); // demo: check every 15s
+  return () => { window.removeEventListener("resize", handleResize); clearInterval(intervalId); };
   }, []);
 
   // Navigation helper
@@ -48,6 +51,7 @@ const handleThemeToggle = () => {
     if (currentRoute.startsWith("/admin/analytics")) return "analytics";
     if (currentRoute.startsWith("/admin/users")) return "users";
     if (currentRoute.startsWith("/admin/requests")) return "requests";
+  if (currentRoute.startsWith("/admin/invoices")) return "invoices";
     if (currentRoute.startsWith("/admin/subscriptions")) return "subscriptions";
     if (currentRoute.startsWith("/app/accounts")) return "accounts";
     return "dashboard";
@@ -67,6 +71,9 @@ const handleThemeToggle = () => {
         break;
       case "requests":
         setCurrentRoute("/admin/requests");
+        break;
+      case "invoices":
+        setCurrentRoute("/admin/invoices");
         break;
       case "subscriptions":
         setCurrentRoute("/admin/subscriptions");
@@ -99,6 +106,7 @@ const handleThemeToggle = () => {
           {currentRoute === "/admin/users/detail" && <UserDetail userId={routeParams.id} navigate={navigate} />}
           {currentRoute === "/admin/requests" && <RequestsList navigate={navigate} />}
           {currentRoute === "/admin/requests/detail" && <RequestDetail requestId={routeParams.id} navigate={navigate} />}
+          {currentRoute === "/admin/invoices" && <InvoicesList />}
           {currentRoute === "/admin/subscriptions" && <SubscriptionsList navigate={navigate} />}
           {currentRoute === "/app/accounts" && <ClientAccounts navigate={navigate} />}
           {currentRoute === "/app/accounts/manage" && <ManageAccount accountId={routeParams.id} navigate={navigate} />}

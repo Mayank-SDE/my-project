@@ -29,80 +29,40 @@ import {
   XCircle,
   Target,
   Zap,
-  Activity
+  Activity,
+  FileText,
+  SendHorizonal,
+  Wallet,
+  AlertTriangle
 } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { getDerivedMetrics } from '../services/analyticsService';
+import { eventBus, EVENTS } from '../services/eventBus';
 
-// Comprehensive analytics data based on schema
-const analyticsData = {
-  kpis: {
-    totalRevenue: 15750000,
-    revenueGrowth: 23.5,
-    totalAccounts: 847,
-    accountsGrowth: 18.2,
-    activeSubscriptions: 752,
-    subscriptionGrowth: 15.8,
-    churnRate: 3.2,
-    avgRevenuePerAccount: 18600,
-    conversionRate: 12.8,
-    customerLifetimeValue: 156000
-  },
-  
-  revenueByMonth: [
-    { month: 'Jul', revenue: 1200000, subscriptions: 95, trials: 45 },
-    { month: 'Aug', revenue: 1350000, subscriptions: 108, trials: 52 },
-    { month: 'Sep', revenue: 1420000, subscriptions: 125, trials: 48 },
-    { month: 'Oct', revenue: 1580000, subscriptions: 142, trials: 55 },
-    { month: 'Nov', revenue: 1650000, subscriptions: 158, trials: 62 },
-    { month: 'Dec', revenue: 1750000, subscriptions: 175, trials: 58 },
-    { month: 'Jan', revenue: 1820000, subscriptions: 192, trials: 65 }
-  ],
-  
-  subscriptionDistribution: [
-    { name: 'Basic', value: 245, amount: 2450000, color: '#8884d8' },
-    { name: 'Professional', value: 312, amount: 6240000, color: '#82ca9d' },
-    { name: 'Enterprise', value: 195, amount: 7060000, color: '#ffc658' }
-  ],
-  
-  geographicDistribution: [
-    { region: 'North America', accounts: 285, revenue: 6200000 },
-    { region: 'Europe', accounts: 198, revenue: 4100000 },
-    { region: 'Asia Pacific', accounts: 245, revenue: 3800000 },
-    { region: 'Others', accounts: 119, revenue: 1650000 }
-  ],
-  
-  customerJourney: [
-    { stage: 'Trial Signup', count: 1250, conversion: 100 },
-    { stage: 'Active Trial', count: 892, conversion: 71.4 },
-    { stage: 'Trial to Paid', count: 186, conversion: 14.9 },
-    { stage: 'Active Paid', count: 752, conversion: 60.2 },
-    { stage: 'Renewed', count: 645, conversion: 85.8 }
-  ],
-  
-  paymentStatus: {
-    successful: 892,
-    failed: 45,
-    pending: 23,
-    totalAmount: 15750000
-  },
-  
-  moduleUsage: [
-    { module: 'Advanced Analytics', usage: 85, accounts: 425 },
-    { module: 'API Access', usage: 78, accounts: 390 },
-    { module: 'Priority Support', usage: 92, accounts: 195 },
-    { module: 'Custom Integrations', usage: 65, accounts: 325 },
-    { module: 'Bulk Operations', usage: 58, accounts: 290 }
-  ],
-  
-  supportMetrics: {
-    totalTickets: 1250,
-    resolvedTickets: 1105,
-    avgResolutionTime: 4.2,
-    customerSatisfaction: 94.5,
-    escalatedTickets: 28
-  }
-};
+// Static fallback structures used until real metrics; some charts still mock
+const staticRevenueByMonth = [
+  { month: 'Jul', revenue: 1200000 },
+  { month: 'Aug', revenue: 1350000 },
+  { month: 'Sep', revenue: 1420000 },
+  { month: 'Oct', revenue: 1580000 },
+  { month: 'Nov', revenue: 1650000 },
+  { month: 'Dec', revenue: 1750000 },
+  { month: 'Jan', revenue: 1820000 }
+];
 
 export function AnalyticsDashboard() {
+  const [metrics, setMetrics] = useState(getDerivedMetrics());
+  useEffect(()=>{
+    const update = () => setMetrics(getDerivedMetrics());
+    const offs = [
+      eventBus.on(EVENTS.ACCOUNTS_CHANGED, update),
+      eventBus.on(EVENTS.SUBSCRIPTIONS_CHANGED, update),
+      eventBus.on(EVENTS.REQUESTS_CHANGED, update),
+      eventBus.on(EVENTS.INVOICES_CHANGED, update)
+    ];
+    return () => { offs.forEach(o=>o()); };
+  },[]);
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -118,6 +78,19 @@ export function AnalyticsDashboard() {
 
   const formatPercentage = (num: number) => {
     return `${num.toFixed(1)}%`;
+  };
+
+  // Simple derived arrays using metrics for dynamic charts (placeholder logic)
+  const subscriptionDistribution = metrics.planDistribution.map(p => ({ name: p.plan, value: p.count, color: '#8884d8' }));
+  const moduleUsage = [
+    { module: 'Analytics', usage: 85, accounts: Math.round(metrics.totals.accounts*0.5) },
+    { module: 'API', usage: 78, accounts: Math.round(metrics.totals.accounts*0.4) },
+    { module: 'Integrations', usage: 65, accounts: Math.round(metrics.totals.accounts*0.3) }
+  ];
+  const paymentStatus = {
+    successful: metrics.invoiceStatusCounts['PAID']||0,
+    failed: metrics.invoiceStatusCounts['VOID']||0,
+    pending: metrics.invoiceStatusCounts['SENT']||0
   };
 
   return (
@@ -150,17 +123,17 @@ export function AnalyticsDashboard() {
       </div>
 
       {/* Key Performance Indicators */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(analyticsData.kpis.totalRevenue)}</div>
+    <div className="text-2xl font-bold">{formatCurrency(metrics.totals.revenueInr)}</div>
             <div className="flex items-center text-xs text-muted-foreground mt-1">
               <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-              +{formatPercentage(analyticsData.kpis.revenueGrowth)} from last month
+      Live paid invoice revenue
             </div>
           </CardContent>
         </Card>
@@ -171,10 +144,10 @@ export function AnalyticsDashboard() {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(analyticsData.kpis.totalAccounts)}</div>
+            <div className="text-2xl font-bold">{formatNumber(metrics.totals.accounts)}</div>
             <div className="flex items-center text-xs text-muted-foreground mt-1">
               <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-              +{formatPercentage(analyticsData.kpis.accountsGrowth)} from last month
+              Accounts (all plans)
             </div>
           </CardContent>
         </Card>
@@ -185,10 +158,10 @@ export function AnalyticsDashboard() {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(analyticsData.kpis.activeSubscriptions)}</div>
+            <div className="text-2xl font-bold">{formatNumber(metrics.totals.activeSubscriptions)}</div>
             <div className="flex items-center text-xs text-muted-foreground mt-1">
               <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-              +{formatPercentage(analyticsData.kpis.subscriptionGrowth)} from last month
+              Active subscriptions
             </div>
           </CardContent>
         </Card>
@@ -199,7 +172,7 @@ export function AnalyticsDashboard() {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatPercentage(analyticsData.kpis.churnRate)}</div>
+            <div className="text-2xl font-bold">3.2%</div>
             <div className="flex items-center text-xs text-muted-foreground mt-1">
               <TrendingDown className="h-3 w-3 mr-1 text-green-500" />
               -0.8% from last month
@@ -213,13 +186,21 @@ export function AnalyticsDashboard() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(analyticsData.kpis.avgRevenuePerAccount)}</div>
+            <div className="text-2xl font-bold">{metrics.totals.accounts? formatCurrency(Math.round(metrics.totals.revenueInr/metrics.totals.accounts)) : '₹0'}</div>
             <div className="flex items-center text-xs text-muted-foreground mt-1">
               <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
               +5.2% from last month
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Invoice KPI Badges */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <Card><CardContent className="p-3 flex items-center justify-between"><span className="text-xs font-medium flex items-center gap-1"><FileText className="h-3 w-3" /> Draft Quotes</span><span className="text-sm font-semibold">{metrics.totals.draftQuotations}</span></CardContent></Card>
+        <Card><CardContent className="p-3 flex items-center justify-between"><span className="text-xs font-medium flex items-center gap-1"><SendHorizonal className="h-3 w-3" /> Sent</span><span className="text-sm font-semibold">{metrics.invoiceStatusCounts['SENT']||0}</span></CardContent></Card>
+        <Card><CardContent className="p-3 flex items-center justify-between"><span className="text-xs font-medium flex items-center gap-1"><Wallet className="h-3 w-3" /> Paid</span><span className="text-sm font-semibold">{metrics.invoiceStatusCounts['PAID']||0}</span></CardContent></Card>
+        <Card><CardContent className="p-3 flex items-center justify-between"><span className="text-xs font-medium flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> Overdue</span><span className="text-sm font-semibold text-red-600">{metrics.invoiceStatusCounts['OVERDUE']||0}</span></CardContent></Card>
       </div>
 
       <Tabs defaultValue="revenue" className="space-y-6">
@@ -241,7 +222,7 @@ export function AnalyticsDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={analyticsData.revenueByMonth}>
+                  <AreaChart data={staticRevenueByMonth}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -264,8 +245,8 @@ export function AnalyticsDashboard() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Payment Status</CardTitle>
-                <CardDescription>Current payment distribution</CardDescription>
+        <CardTitle>Payment Status</CardTitle>
+        <CardDescription>Current invoice distribution</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -274,10 +255,8 @@ export function AnalyticsDashboard() {
                     <span className="text-sm">Successful</span>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold">{formatNumber(analyticsData.paymentStatus.successful)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatPercentage((analyticsData.paymentStatus.successful / (analyticsData.paymentStatus.successful + analyticsData.paymentStatus.failed + analyticsData.paymentStatus.pending)) * 100)}
-                    </p>
+          <p className="font-semibold">{formatNumber(paymentStatus.successful)}</p>
+          <p className="text-xs text-muted-foreground">{paymentStatus.successful + paymentStatus.failed + paymentStatus.pending ===0 ? '0%' : formatPercentage((paymentStatus.successful /(paymentStatus.successful + paymentStatus.failed + paymentStatus.pending))*100)}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -286,10 +265,8 @@ export function AnalyticsDashboard() {
                     <span className="text-sm">Failed</span>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold">{formatNumber(analyticsData.paymentStatus.failed)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatPercentage((analyticsData.paymentStatus.failed / (analyticsData.paymentStatus.successful + analyticsData.paymentStatus.failed + analyticsData.paymentStatus.pending)) * 100)}
-                    </p>
+          <p className="font-semibold">{formatNumber(paymentStatus.failed)}</p>
+          <p className="text-xs text-muted-foreground">{paymentStatus.successful + paymentStatus.failed + paymentStatus.pending ===0 ? '0%' : formatPercentage((paymentStatus.failed /(paymentStatus.successful + paymentStatus.failed + paymentStatus.pending))*100)}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -298,10 +275,8 @@ export function AnalyticsDashboard() {
                     <span className="text-sm">Pending</span>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold">{formatNumber(analyticsData.paymentStatus.pending)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatPercentage((analyticsData.paymentStatus.pending / (analyticsData.paymentStatus.successful + analyticsData.paymentStatus.failed + analyticsData.paymentStatus.pending)) * 100)}
-                    </p>
+          <p className="font-semibold">{formatNumber(paymentStatus.pending)}</p>
+          <p className="text-xs text-muted-foreground">{paymentStatus.successful + paymentStatus.failed + paymentStatus.pending ===0 ? '0%' : formatPercentage((paymentStatus.pending /(paymentStatus.successful + paymentStatus.failed + paymentStatus.pending))*100)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -318,7 +293,7 @@ export function AnalyticsDashboard() {
                 <CardDescription>Conversion rates through customer lifecycle</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {analyticsData.customerJourney.map((stage) => (
+                {[{ stage: 'Trial Signup', count: 1250, conversion: 100 },{ stage: 'Active Trial', count: 892, conversion: 71.4 },{ stage: 'Trial to Paid', count: 186, conversion: 14.9 }].map((stage) => (
                   <div key={stage.stage} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{stage.stage}</span>
@@ -347,7 +322,7 @@ export function AnalyticsDashboard() {
                     <p className="text-xs text-muted-foreground">Trial to Paid</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold">{formatPercentage(analyticsData.kpis.conversionRate)}</p>
+                    <p className="text-2xl font-bold">12.8%</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-3 border rounded-lg">
@@ -356,7 +331,7 @@ export function AnalyticsDashboard() {
                     <p className="text-xs text-muted-foreground">Lifetime Value</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold">{formatCurrency(analyticsData.kpis.customerLifetimeValue)}</p>
+                    <p className="text-2xl font-bold">₹156,000</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-3 border rounded-lg">
@@ -365,7 +340,7 @@ export function AnalyticsDashboard() {
                     <p className="text-xs text-muted-foreground">Monthly Churn</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold">{formatPercentage(analyticsData.kpis.churnRate)}</p>
+                    <p className="text-2xl font-bold">3.2%</p>
                   </div>
                 </div>
               </CardContent>
@@ -385,7 +360,7 @@ export function AnalyticsDashboard() {
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={analyticsData.subscriptionDistribution}
+                      data={subscriptionDistribution}
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
@@ -393,8 +368,8 @@ export function AnalyticsDashboard() {
                       dataKey="value"
                       label={({ name, value }) => `${name}: ${value}`}
                     >
-                      {analyticsData.subscriptionDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      {subscriptionDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={(entry as any).color} />
                       ))}
                     </Pie>
                     <Tooltip />
@@ -410,7 +385,7 @@ export function AnalyticsDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analyticsData.moduleUsage}>
+                  <BarChart data={moduleUsage}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="module" />
                     <YAxis />
@@ -428,13 +403,13 @@ export function AnalyticsDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analyticsData.subscriptionDistribution}>
+                  <BarChart data={subscriptionDistribution}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip />
                     <Bar dataKey="value">
-                      {analyticsData.subscriptionDistribution.map((entry, index) => (
+                      {subscriptionDistribution.map((entry:any, index:number) => (
                         <Cell key={`cell-bar-${index}`} fill={entry.color} />
                       ))}
                     </Bar>
@@ -491,19 +466,9 @@ export function AnalyticsDashboard() {
               <CardDescription>Revenue and customer distribution by region</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={analyticsData.geographicDistribution} layout="horizontal">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="region" type="category" width={100} />
-                  <Tooltip formatter={(value, name) => [
-                    name === 'revenue' ? formatCurrency(Number(value)) : value,
-                    name === 'revenue' ? 'Revenue' : 'Accounts'
-                  ]} />
-                  <Bar dataKey="accounts" fill="#8884d8" />
-                  <Bar dataKey="revenue" fill="#82ca9d" />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="text-sm text-muted-foreground p-6">
+                Geographic distribution placeholder (integrate real data later)
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -517,7 +482,7 @@ export function AnalyticsDashboard() {
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(analyticsData.supportMetrics.totalTickets)}</div>
+                <div className="text-2xl font-bold">1,250</div>
               </CardContent>
             </Card>
 
@@ -528,7 +493,7 @@ export function AnalyticsDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {formatPercentage((analyticsData.supportMetrics.resolvedTickets / analyticsData.supportMetrics.totalTickets) * 100)}
+                  88.4%
                 </div>
               </CardContent>
             </Card>
@@ -539,7 +504,7 @@ export function AnalyticsDashboard() {
                 <Clock className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.supportMetrics.avgResolutionTime}h</div>
+                <div className="text-2xl font-bold">4.2h</div>
               </CardContent>
             </Card>
 
@@ -549,7 +514,7 @@ export function AnalyticsDashboard() {
                 <Zap className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatPercentage(analyticsData.supportMetrics.customerSatisfaction)}</div>
+                <div className="text-2xl font-bold">94.5%</div>
               </CardContent>
             </Card>
           </div>
